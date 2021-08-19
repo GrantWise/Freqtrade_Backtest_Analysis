@@ -21,7 +21,7 @@ from binance.client import Client
 from datetime import date
 
 import matplotlib.pyplot as plt
-
+import seaborn as sns
 
 # Define Constants
 client = Client('','')
@@ -46,7 +46,7 @@ interval = '1d'
 # =============================================================================
 
 
-# Load Backtest Results
+# Load Backtest Results, check path in line 100
 backtest_results = [
     "backtest-result-20180115-20180420_down",
     "backtest-result-20180420-20180518_up",
@@ -63,7 +63,7 @@ backtest_results = [
     "backtest-result-20210128-20210324_up",
     "backtest-result-20210324-20210519_up",
     "backtest-result-20210519-20210728_down",
-    "backtest-result-20210728-20210817_up"
+    "backtest-result-20210728-20210818_up"
     ]
 
 # Columns to drop from trades dictionary, can be replaced by using meta in normalize function
@@ -152,22 +152,77 @@ df_s = df_daily_returns.loc[convert(start):]
 df_cum_returns = df_s.cumsum() 
 df_daily_profit = df_s / 1000 # Initial stake amount 1000
 
+
+df = df_trade_profit.groupby('strategy').filter(lambda x : 
+                                                (
+                                                    (x['profit_ratio'].mean() > 0.0125) & 
+                                                    (x['profit_ratio'].median() > 0.0125)
+                                                ))
+
+
 # Plots
+
+# Bar Plot of Average Trade Profit Ratio
+
+fig, ax = plt.subplots(1,1, figsize = (15,7))
+
+plt.barh(df_trade_profit.groupby('strategy').mean('profit_ratio').index, 
+        df_trade_profit.groupby('strategy').mean('profit_ratio')['profit_ratio'])
+
+ax.axvline(0.01, color='#fc4f30')
+ax.axvline(0.0125, color='orange', linestyle='--', label='0.0125')
+
+ax.set_title('Average Trade Profit Ratio by Strategy', fontsize=16)
+ax.set_xlabel('Trade Ratio', fontsize=14)
+ax.set_ylabel('Strategy')
+ax.text(0.95, 0.05, start + '-', horizontalalignment='center', verticalalignment='center', transform=ax.transAxes,
+        bbox=dict(edgecolor='black', facecolor='white'))
+
+plt.tight_layout()
+ax.grid(axis='x')
+
+plt.show()
+fig.savefig('AverageTradeProfitRatio.png')
+
+# Violin Plot of Strategies
+
+fig, ax = plt.subplots(1,1, figsize = (15,7))
+
+sns.violinplot(y=df['strategy'], x=df['profit_ratio'], color="skyblue")
+# sns.boxplot(y=df['strategy'], x=df['profit_ratio'])
+
+# sns.color_palette("ch:s=.25,rot=-.25", as_cmap=True)
+
+plt.show()
+fig.savefig('AverageTradeProfitRatioVP.png')
+
+
+# Bar Plot of Strategies Mean Trade ratio
+
+fig, ax = plt.subplots(1,1, figsize = (15,7))
+
+plt.barh(y=df_trade_profit['strategy'], width=df_trade_profit['profit_ratio'].mean())
+
+plt.show()
+
+
+
+
+# Strategies to plot
+## Need to make this a dynamic list that changes based on specific criteria e.g mean, trades/day etc
+g1 = 'ElliotV5'
+g4 = 'NostalgiaForInfinityV7'
+g2 = 'NotAnotherSMAOffsetStrategy'
+g6 = 'NostalgiaForInfinityV6'
+g3 = 'Combined_NFIv7_SMA'
+g5 = 'NostalgiaForInfinityV8'
+# g6 = 'Obelisk_Ichimoku_Slow_v1_3'
 
 # Plot 1: Cumulative Returns since start date
 
 fig, ax = plt.subplots(1,1, figsize = (14,7))
 
-# Strategies to plot
-g1 = 'ElliotV5'
-g4 = 'ElliotV4'
-g2 = 'NotAnotherSMAOffsetStrategy'
-# g5 = 'SMAOffset'
-g3 = 'Combined_NFIv7_SMA'
-g5 = 'NostalgiaForInfinityV8'
-g6 = 'Obelisk_Ichimoku_Slow_v1_3'
-
-# Need to iterate over strategies
+## Need to iterate over strategies
 ax.plot(df_cum_returns[g1], label = g1 )
 ax.plot(df_cum_returns[g2], label = g2 )
 ax.plot(df_cum_returns[g3], label = g3 )
@@ -192,7 +247,7 @@ plt.tight_layout()
 ax.legend(fontsize=10)
 ax.grid(False)
 plt.show()
-# fig.savefig('CumulativeDailyReturns.png')
+fig.savefig('CumulativeDailyReturns.png')
 
 # Plot 2
 # Time series plot of daily returns per strategy
@@ -297,13 +352,28 @@ plt.show()
 
 # Trade Anlaysis
 
+df = df_trade_profit.groupby('strategy').filter(lambda x : 
+                                                (
+                                                    (x['profit_ratio'].mean() > 0.01) & 
+                                                    (x['profit_ratio'].median() > 0.01)
+                                                ))
+
+
+df_trade_strategy = df_trade_profit.groupby('strategy').mean('profit_ratio')
+
+
+
+
+
+
+
 
 
 
 
 # Strategy Portfolio
 
-# Use above analysis to exclude strategies before running this, 
+# Use above analysis to exclude strategies before running this, currently the weights will not make much sense.
 # This is still very much work in progress and needs a lot of work and I am not sure if it is a theoretically sound application of the method
 
 # Calculate expected returns and sample covariance
@@ -313,7 +383,7 @@ mu.sort_values().plot.barh(figsize=(10,6))
 # Calculate expected returns and sample covariance
 mu = expected_returns.ema_historical_return(df_daily_profit, returns_data=True, compounding=True, span=180, frequency=365)
 # mu = expected_returns.capm_return(df_daily_profit, returns_data=True)
-mu.plot.barh(figsize=(10,6)).sort_values
+mu.plot.barh(figsize=(10,6))
 
 # S = risk_models.exp_cov(df_daily_profit, returns_data=True, span=180, frequency=365, log_returns=False) 
 S = risk_models.CovarianceShrinkage(df_daily_profit, returns_data=True).ledoit_wolf()
