@@ -20,6 +20,9 @@ from pypfopt import plotting
 from pypfopt import risk_models
 from pypfopt.efficient_frontier import EfficientFrontier
 
+import numpy as np
+from numpy.random import *
+
 # Define Constants
 client = Client('', '')
 end = date.today().strftime("%Y.%m.%d")
@@ -44,6 +47,7 @@ top_n = 5
 # =============================================================================
 
 # Backtest results path
+
 #backtest_results_path = '/home/hippocrite/freqtrade//docker/user_data/backtest_results/'
 backtest_results_path = 'C://ft_userdata//user_data//backtest_results'
 
@@ -109,7 +113,6 @@ df_daily_returns = pd.DataFrame(columns=strategies)
 for file in backtest_results:
     print(file)
     jsonFile = os.path.join(backtest_results_path, file + '.json')
-
 
     # Open Json File
     with open(jsonFile) as f:
@@ -193,16 +196,13 @@ ax.text(0.9, 0.05, first_date + '-' + last_date, horizontalalignment='center', v
 
 plt.tight_layout()
 ax.grid(axis='x')
-
 plt.show()
 # fig.savefig('AverageTradeProfitRatio.png')
-
 
 
 # Violin Plot of Strategies
 
 fig, ax = plt.subplots(1, 1, figsize=(15, 7))
-
 sns.violinplot(y=df['strategy'], x=df['profit_ratio'], color="skyblue")
 
 plt.show()
@@ -211,11 +211,16 @@ plt.show()
 
 # Plot 1 Cumulative Returns
 fig, ax = plt.subplots(1, 1, figsize=(14, 7))
-for strategy in top_strategies[-top_n:]:
-    ax.plot(df_cum_returns[strategy], label=strategy)
+
+df_cum_returns.plot(ax=ax)
+ax2 = ax.twinx()
+ax2.set_ylim(ax.get_ylim())
+ax2.set_yticks([df_cum_returns[strategy].iloc[-1] for strategy in df_cum_returns.columns])
+ax2.set_yticklabels(df_cum_returns.columns)
 
 ax.set_title('Cumulative Strategy Returns')
 ax.set_ylabel('Returns (USD)')
+
 plt.tight_layout()
 ax.legend(fontsize=10)
 ax.grid(False)
@@ -225,14 +230,15 @@ plt.show()
 
 # Plot 2
 # Time series plot of daily returns per strategy
-fig, ax = plt.subplots(6, 1, figsize=(15, 12), sharex=True)
+fig, ax = plt.subplots(len(strategies), 1, figsize=(15, 12), sharex=True)
 
-for n, strategy in strategies:
+n = 0
+for strategy in strategies:
     ax[n].plot(df_daily_profit[strategy])
     ax[n].axhline(df_daily_profit[strategy].mean(), color='cyan', linestyle='--', linewidth=1, label='Mean')
     ax[n].axhline(0, color='red', linestyle='--', linewidth=1, label='Mean')
     ax[n].set_title(strategy, loc='left', fontsize=10)
-
+    n += 1
 
 fig.suptitle('Daily Strategy Returns (%)', fontsize=16)
 fig.supylabel('Return (%)', fontsize=16)
@@ -244,23 +250,25 @@ plt.show()
 # Plot 3
 # Histograms of Daily Returns per strategy
 
-fig, ax = plt.subplots(2, 3, figsize=(15, 7), sharex=True, sharey=True)
+fig, ax = plt.subplots(len(strategies), 3, figsize=(15, 7), sharex=True, sharey=True)
 
 bins = [-0.1, -0.0875, -0.075, -0.0625, -0.05,
         -0.0375, -0.025, -0.0125, 0, 0.0125,
         0.025, 0.0375, 0.05, 0.0625, 0.075,
         0.0875, 0.1, 0.1125, 0.125, 0.1375, 0.15]
-for n, strategy in strategies:
+n = 0
+for strategy in strategies:
     # Plot 1
     ax[n, 0].hist(df_daily_profit[strategy], bins=bins, density=True, edgecolor='b', label=strategy)
     ax[n, 0].set_title(strategy, fontsize=10)
     ax[n, 0].axvline(0, color='#fc4f30')
     ax[n, 0].axvline(df_daily_profit[strategy].mean(), color='orange', linestyle='--')
-
+    n += 1
 
 fig.suptitle('Daily Strategy Returns 2021-01-01 : 2021-08-15 (%)', fontsize=16)
 fig.supylabel('Return (%)', fontsize=16)
 plt.tight_layout()
+
 
 plt.show()
 # fig.savefig('HistDailyReturns.png')
