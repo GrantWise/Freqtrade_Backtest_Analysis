@@ -11,6 +11,7 @@ from datetime import date
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 import seaborn as sns
 from binance.client import Client
 from pandas.io.json import json_normalize  # package for flattening json in pandas df
@@ -26,6 +27,7 @@ start = '2021.01.01'
 quote = 'USDT'
 ticker = 'BTC'
 interval = '1d'
+top_n = 5
 
 # =============================================================================
 # # Load OHLCV Data for Benchmark
@@ -42,14 +44,18 @@ interval = '1d'
 # =============================================================================
 
 # Backtest results path
-backtest_results_path = '/home/hippocrite/freqtrade//docker/user_data/backtest_results/'
+#backtest_results_path = '/home/hippocrite/freqtrade//docker/user_data/backtest_results/'
+backtest_results_path = 'C://ft_userdata//user_data//backtest_results'
 
 
 # Load Backtest Results, check path in line 100
 backtest_results = [
-    "backtest-result-2021-08-27_19-56-21",
-    "backtest-result-2021-08-27_20-33-23"
-]
+    "backtest-result-20201009-20210128_up",
+    "backtest-result-20210128-20210324_up",
+    "backtest-result-20210324-20210519_up",
+    "backtest-result-20210519-20210728_down",
+    "backtest-result-20210728-20210822_up"
+    ]
 
 # Columns to drop from trades dictionary, can be replaced by using meta in normalize function
 drop_columns = ["stake_amount",
@@ -121,7 +127,7 @@ for file in backtest_results:
         # Populate Trade Performance Dataframe
         # s[strategy]['trades']
         df_temp = json_normalize(s[strategy],
-                                 record_path='trades')  # Figure out how to drop columns using path and meta
+                                record_path='trades')  # Figure out how to drop columns using path and meta
         df_temp['strategy'] = strategy
         df_temp.drop(drop_columns, axis=1, inplace=True)
         df_trade_profit = df_trade_profit.append(df_temp)
@@ -152,55 +158,60 @@ df = df_trade_profit.groupby('strategy').filter(lambda x:
                                                         (x['profit_ratio'].median() > 0.0125)
                                                 ))
 
-# Plots
+# Calculate the mean trade ratio for all strategies
+strategy_mean_trade_ratio = df_trade_profit.groupby('strategy').mean('profit_ratio').sort_values('profit_ratio') # Sorted Descending Strategy Trade Ratio Mean
+# strategy_mean_trade_ratio = df_trade_profit.groupby('strategy').mean('profit_ratio') # No sort
+
+# First and Last day of trades to be charted
+first_date = df_daily_returns.first_valid_index().strftime("%Y.%m.%d")
+last_date = df_daily_returns.last_valid_index().strftime("%Y.%m.%d")
+
+top_strategies = strategy_mean_trade_ratio.index.tolist()
+top_strategies[-top_n:]
+
+
+
+## Plots
 
 # Bar Plot of Average Trade Profit Ratio
-
 fig, ax = plt.subplots(1, 1, figsize=(15, 7))
 
-plt.barh(df_trade_profit.groupby('strategy').mean('profit_ratio').index,
-         df_trade_profit.groupby('strategy').mean('profit_ratio')['profit_ratio'])
+plt.barh(strategy_mean_trade_ratio.index,
+        strategy_mean_trade_ratio['profit_ratio'])
 
 ax.axvline(0.01, color='#fc4f30')
-ax.axvline(0.0125, color='orange', linestyle='--', label='0.0125')
+ax.axvline(strategy_mean_trade_ratio['profit_ratio'].median(), 
+           color='orange', 
+           linestyle='--', 
+           label=strategy_mean_trade_ratio['profit_ratio'].median())
 
 ax.set_title('Average Trade Profit Ratio by Strategy', fontsize=16)
 ax.set_xlabel('Trade Ratio', fontsize=14)
 ax.set_ylabel('Strategy')
-ax.text(0.95, 0.05, start + '-', horizontalalignment='center', verticalalignment='center', transform=ax.transAxes,
+ax.text(0.9, 0.05, first_date + '-' + last_date, horizontalalignment='center', verticalalignment='center', transform=ax.transAxes,
         bbox=dict(edgecolor='black', facecolor='white'))
 
 plt.tight_layout()
 ax.grid(axis='x')
 
 plt.show()
-fig.savefig('AverageTradeProfitRatio.png')
+# fig.savefig('AverageTradeProfitRatio.png')
+
+
 
 # Violin Plot of Strategies
 
 fig, ax = plt.subplots(1, 1, figsize=(15, 7))
 
 sns.violinplot(y=df['strategy'], x=df['profit_ratio'], color="skyblue")
-# sns.boxplot(y=df['strategy'], x=df['profit_ratio'])
-
-# sns.color_palette("ch:s=.25,rot=-.25", as_cmap=True)
 
 plt.show()
-fig.savefig('AverageTradeProfitRatioVP.png')
+# fig.savefig('AverageTradeProfitRatioVP.png')
 
-# Bar Plot of Strategies Mean Trade ratio
 
-fig, ax = plt.subplots(1, 1, figsize=(15, 7))
-
-plt.barh(y=df_trade_profit['strategy'], width=df_trade_profit['profit_ratio'].mean())
-
-plt.show()
-
-# Strategies to plot
-## Need to make this a dynamic list that changes based on specific criteria e.g mean, trades/day etc
-
+# Plot 1 Cumulative Returns
 fig, ax = plt.subplots(1, 1, figsize=(14, 7))
-for strategy in strategies:
+for strategy in top_strategies[-top_n:]:
     ax.plot(df_cum_returns[strategy], label=strategy)
 
 ax.set_title('Cumulative Strategy Returns')
@@ -208,8 +219,9 @@ ax.set_ylabel('Returns (USD)')
 plt.tight_layout()
 ax.legend(fontsize=10)
 ax.grid(False)
+
 plt.show()
-fig.savefig('CumulativeDailyReturns.png')
+# fig.savefig('CumulativeDailyReturns.png')
 
 # Plot 2
 # Time series plot of daily returns per strategy
