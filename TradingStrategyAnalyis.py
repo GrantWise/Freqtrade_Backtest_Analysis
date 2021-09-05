@@ -12,9 +12,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import seaborn as sns
-# import ffn
 
 from datetime import date
+from matplotlib.dates import DateFormatter
+from datetime import datetime
+
 # from binance.client import Client
 # package for flattening json in pandas df
 from pandas.io.json import json_normalize
@@ -32,7 +34,7 @@ start = '2021.05.18'
 quote = 'USDT'
 ticker = 'BTC'
 interval = '1d'
-top_n = 5
+top_n = 8
 min_trade_ratio = 0.02
 
 # =============================================================================
@@ -50,7 +52,7 @@ min_trade_ratio = 0.02
 # =============================================================================
 
 # Backtest results path
-#backtest_results_path = '/home/hippocrite/freqtrade//docker/user_data/backtest_results/'
+# backtest_results_path = '/home/hippocrite/freqtrade//docker/user_data/backtest_results/'
 backtest_results_path = 'C://ft_userdata//user_data//backtest_results'
 
 
@@ -94,8 +96,26 @@ def convert(date_time):
     return datetime_str
 
 
+def month_list(df):
+    '''
+    Pass a dataframe where the index is a time series
+    return list of months
+    '''
+    period = df.index.tolist()
+    start = period[0]
+    end = period[-1]
+    month_list = [i.strftime("%d-%b-%y") for i in pd.date_range(start, end, freq='MS')]
+    return month_list
+
+
 # Plots Horizontal Bar Chart
-def bar_h_plot(df, data, title, x_label, y_label, first_date, last_date):
+def bar_h_plot(df,
+               data,
+               title="Title",
+               x_label="X-Label",
+               y_label="Y-Label",
+               first_date=start,
+               last_date=end):
     '''
     Horizontal Bar Plot
     df      is a dataframe where the index is plotted on the Y-Axis
@@ -145,13 +165,22 @@ def bar_h_plot(df, data, title, x_label, y_label, first_date, last_date):
 
 
 # Line plot for multiple strategies
-def line_plot(strategies, df, num):
+def line_plot(strategies,
+              df,
+              num,
+              title="Title",
+              x_label="X-Label",
+              y_label="Y-Label",
+              first_date=start,
+              last_date=end):
     '''
     Daily Line Plot of strategies defined in list
     sorted in ascending order.
     df is the data to be graphed
     Graphs bottom n strategies from list
     '''
+    months = month_list(df)
+
     fig, ax = plt.subplots(nrows=num, ncols=1, figsize=(
         15, 12), sharex=True, sharey=True)
 
@@ -164,6 +193,10 @@ def line_plot(strategies, df, num):
 
         ax[n].axhline(0,
                       color='red', linestyle='--', linewidth=1)
+
+        for i in months:
+            ax[n].axvline(datetime.strptime(i, "%d-%b-%y"),
+                          color='red', linestyle='--', linewidth=1)
 
         ax[n].set_title(strategy, loc='left', fontsize=10)
         n += 1
@@ -340,6 +373,8 @@ plt.show()
 
 
 # Plot 1 Cumulative Returns
+months = month_list(df_cum_returns)
+
 fig, ax = plt.subplots(1, 1, figsize=(14, 7))
 
 df_cum_returns[top_strategies[-top_n:]].plot(ax=ax)
@@ -351,6 +386,9 @@ ax2.set_yticks(
 
 ax2.set_yticklabels(df_cum_returns[top_strategies[-top_n:]].columns)
 
+for i in months:
+    ax.axvline(datetime.strptime(i, "%d-%b-%y"), color='red', linestyle='--', linewidth=1)
+
 ax.set_title('Cumulative Strategy Returns')
 ax.set_ylabel('Returns (USD)',)
 
@@ -361,15 +399,13 @@ ax.grid(False)
 plt.show()
 # fig.savefig('CumulativeDailyReturns.png')
 
-for strategy in top_strategies[-top_n:]:
-    ax.plot(df_cum_returns[strategy], label=strategy)
-
 
 # Plot 2
 # Time series plot of daily returns per strategy
 
 a = ['NostalgiaForInfinityV7_10_1', 'NostalgiaForInfinityV7_10_0',
      'NostalgiaForInfinityV7', 'NostalgiaForInfinityV6', 'NostalgiaForInfinityV7_2_0']
+
 line_plot(top_strategies, df_daily_profit, top_n)
 line_plot(a, df_daily_profit, top_n)
 
@@ -416,90 +452,3 @@ plt.tight_layout()
 
 plt.show()
 # fig.savefig('HistDailyReturns.png')
-
-
-# Trade Anlaysis
-
-
-# Strategy Portfolio
-
-# Use above analysis to exclude strategies before running this, currently the weights will not make much sense.
-# This is still very much work in progress and needs a lot of work and I am not sure if it is a theoretically sound application of the method
-
-# Calculate expected returns and sample covariance
-mu = expected_returns.ema_historical_return(df_daily_profit,
-                                            returns_data=True,
-                                            compounding=True,
-                                            span=120,
-                                            frequency=365)
-
-mu.sort_values().plot.barh(figsize=(10, 6))
-
-# S = risk_models.exp_cov(df_daily_profit, returns_data=True, span=180, frequency=365, log_returns=False)
-
-S = risk_models.CovarianceShrinkage(
-    df_daily_profit, returns_data=True).ledoit_wolf()
-
-plotting.plot_covariance(S, plot_correlation=True)
-
-# Optimize for maximal Sharpe ratio
-ef = EfficientFrontier(mu, S)
-weights = ef.max_sharpe()
-ef.portfolio_performance(verbose=True)
-
-cleaned_weights = ef.clean_weights()
-ef.save_weights_to_file("weights.txt")  # saves to file
-print(cleaned_weights)
-
-# Plot of portfolio weights
-
-# Not working as I need to figure out how to convert dictionary to dataframe
-
-# =============================================================================
-# cleaned_weights.keys()
-#
-# pd.DataFrame(orderedDictList, columns=orderedDictList.keys())
-#
-# fig, ax = plt.subplots(1,1, figsize = (15,12))
-#
-# ax[0,0].barh(cleaned_weights)
-#
-# ax.set_title('Cumulative Strategy Returns')
-# ax.set_ylabel('Returns (USD)')
-# plt.tight_layout()
-# ax.legend(fontsize=10)
-# ax.grid(False)
-# plt.show()
-# =============================================================================
-
-#
-# pd.DataFrame(orderedDictList, columns=orderedDictList.keys())
-#
-# fig, ax = plt.subplots(1,1, figsize = (15,12))
-#
-# ax[0,0].barh(cleaned_weights)
-#
-# ax.set_title('Cumulative Strategy Returns')
-# ax.set_ylabel('Returns (USD)')
-# plt.tight_layout()
-# ax.legend(fontsize=10)
-# ax.grid(False)
-# plt.show()
-# =============================================================================
-()
-# =============================================================================
-
-#
-# pd.DataFrame(orderedDictList, columns=orderedDictList.keys())
-#
-# fig, ax = plt.subplots(1,1, figsize = (15,12))
-#
-# ax[0,0].barh(cleaned_weights)
-#
-# ax.set_title('Cumulative Strategy Returns')
-# ax.set_ylabel('Returns (USD)')
-# plt.tight_layout()
-# ax.legend(fontsize=10)
-# ax.grid(False)
-# plt.show()
-# =============================================================================
