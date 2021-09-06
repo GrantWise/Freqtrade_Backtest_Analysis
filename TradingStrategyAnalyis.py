@@ -17,7 +17,7 @@ from datetime import date
 from matplotlib.dates import DateFormatter
 from datetime import datetime
 
-# from binance.client import Client
+from binance.client import Client
 # package for flattening json in pandas df
 from pandas.io.json import json_normalize
 from pypfopt import expected_returns
@@ -28,28 +28,15 @@ from pypfopt.efficient_frontier import EfficientFrontier
 from numpy.random import *
 
 # Define Constants
-# client = Client('', '')
-end = date.today().strftime("%Y.%m.%d")
-start = '2021.05.18'
+client = Client('', '')
+date_end = date.today().strftime("%Y.%m.%d")
+date_start = '2021.05.18'
 quote = 'USDT'
 ticker = 'BTC'
 interval = '1d'
-top_n = 8
+top_n = 6
 min_trade_ratio = 0.02
 
-# =============================================================================
-# # Load OHLCV Data for Benchmark
-# ohlcv = client.get_historical_klines(symbol = ticker + quote, interval= interval, start_str= start)
-# df_ticker = pd.DataFrame(ohlcv, columns=['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Close time', 'Quote asset volume', 'Number_trades', 'Taker buy base asset volume', 'Taker buy quote asset volume', 'Ignore'])
-# df_ticker.drop(columns = ['Open', 'High', 'Low', 'Volume', 'Number_trades', 'Close time','Quote asset volume','Taker buy base asset volume','Taker buy quote asset volume','Ignore'], inplace = True)
-# df_ticker[['Close']] = df_ticker[['Close']].astype(float)
-# df_ticker['Date'] = pd.to_datetime(df_ticker['Date'], unit='ms')
-#
-# df = df_ticker
-# df.set_index("Date", inplace = True)
-# df['BTC'] = df.pct_change()
-# df['cum_return'] = df['BTC'].cumsum()
-# =============================================================================
 
 # Backtest results path
 # backtest_results_path = '/home/hippocrite/freqtrade//docker/user_data/backtest_results/'
@@ -59,7 +46,7 @@ backtest_results_path = 'C://ft_userdata//user_data//backtest_results'
 # Load Backtest Results, check path in line 100
 backtest_results = [
 
-    "NFI-result-20210519-20210728_down"
+    "NFI-result-20210728-20210905_up"
 ]
 
 # Columns to drop from trades dictionary,
@@ -108,14 +95,34 @@ def month_list(df):
     return month_list
 
 
+def benchmark(ticker, quote=quote, start=date_start, end=date_end, interval='1d'):
+    '''
+    Load OHLCV Data for Benchmark
+    '''
+    ohlcv = client.get_historical_klines(
+        symbol=ticker + quote, interval=interval, start_str=start, end_str=end)
+    df_ticker = pd.DataFrame(ohlcv, columns=['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Close time',
+                             'Quote asset volume', 'Number_trades', 'Taker buy base asset volume', 'Taker buy quote asset volume', 'Ignore'])
+    df_ticker.drop(columns=['Open', 'High', 'Low', 'Volume', 'Number_trades', 'Close time', 'Quote asset volume',
+                   'Taker buy base asset volume', 'Taker buy quote asset volume', 'Ignore'], inplace=True)
+    df_ticker[['Close']] = df_ticker[['Close']].astype(float)
+    df_ticker['Date'] = pd.to_datetime(df_ticker['Date'], unit='ms')
+
+    df = df_ticker
+    df.set_index("Date", inplace=True)
+    df['BTC'] = df.pct_change()
+    df['cum_return'] = df['BTC'].cumsum()
+    return(df)
+
+
 # Plots Horizontal Bar Chart
 def bar_h_plot(df,
                data,
                title="Title",
                x_label="X-Label",
                y_label="Y-Label",
-               first_date=start,
-               last_date=end):
+               first_date=date_start,
+               last_date=date_end):
     '''
     Horizontal Bar Plot
     df      is a dataframe where the index is plotted on the Y-Axis
@@ -171,8 +178,8 @@ def line_plot(strategies,
               title="Title",
               x_label="X-Label",
               y_label="Y-Label",
-              first_date=start,
-              last_date=end):
+              first_date=date_start,
+              last_date=date_end):
     '''
     Daily Line Plot of strategies defined in list
     sorted in ascending order.
@@ -211,21 +218,31 @@ def line_plot(strategies,
     return
 
 
-# Read the first file to get a list of the strategies in the first file,
-# assume all files contain the same strategies
-jsonPath = os.path.join(backtest_results_path, backtest_results[0] + ".json")
-print(jsonPath)
-with open(jsonPath) as f:
-    data = json.load(f)
-strategies = getList(data["strategy"])
-df_daily_returns = pd.DataFrame(columns=strategies)
+def get_strat_backtest():
+    '''
+    Read the first file to get a list of the strategies in the first file,
+    assume all files contain the same strategies
+    '''
+    jsonPath = os.path.join(backtest_results_path, backtest_results[0] + ".json")
+    print(jsonPath)
+    with open(jsonPath) as f:
+        data = json.load(f)
+    strategies = getList(data["strategy"])
+    return strategies
+
+
+strategies = get_strat_backtest()
+
+#######
 
 # =============================================================================
 # Testing Data
-# file = 'backtest-result-20210728-20210817_up'
+# file = 'NFI-result-20210728-20210905_up'
 # trade = 0
-# strategy = 'BigZ03'
+# strategy = 'NostalgiaForInfinityV7'
 # =============================================================================
+
+df_daily_returns = pd.DataFrame(columns=strategies)
 
 # Loop over all the files in the backtest_results list
 for file in backtest_results:
@@ -255,7 +272,7 @@ for file in backtest_results:
     for strategy in strategies:
         # print(strategy)
 
-        # Populate Trade Performance Dataframe
+        # Populate Trade Performance Dataframe - JSON format s[strategy]['trades']
         # s[strategy]['trades']
         df_temp = pd.json_normalize(s[strategy],
                                     record_path='trades')  # Figure out how to drop columns using path and meta
@@ -263,8 +280,7 @@ for file in backtest_results:
         df_temp.drop(drop_columns, axis=1, inplace=True)
         df_trade_profit = df_trade_profit.append(df_temp)
 
-        # Populate Daily Returns Dataframe
-        # s[strategy]['daily_profit']
+        # Populate Daily Returns Dataframe - JSON format s[strategy]['daily_profit']
         df_temp_daily = pd.json_normalize(
             s[strategy], record_path='daily_profit')
 
@@ -276,49 +292,74 @@ for file in backtest_results:
         df_daily_profit = df_daily_profit.append(df_temp_daily)
         df_daily_profit = df_daily_profit.iloc[:-1]
 
-    df_daily_profit = df_daily_profit.pivot(
-        index="date", columns="strategy", values="daily_profit")
+    df_daily_profit = df_daily_profit.pivot(index="date",
+                                            columns="strategy",
+                                            values="daily_profit")
 
     df_daily_profit.fillna(0, inplace=True)
     df_trade_profit.reset_index(drop=True, inplace=True)
     df_daily_returns = df_daily_returns.append(df_daily_profit)
 
+df_daily_profit = df_daily_returns / 1000  # Initial stake amount 1000
+
+
+###############################################################################
+# Dataframes constructed with reportable data
+# df_daily_returns - Daily returns (Base Currency amount) for each strategy in the strategy list created from the first backtest file
+# df_daily_profit - Daily Returns expressed as a percentage
+# df_trade_profit - Profit ratio for each trade shows pair and strategy
+###############################################################################
+
+
+# Start Analysis
+
+
+# Calculate Cumulative REturns from Start Date
 # Slice Data to Start Date for analysis
-df_s = df_daily_returns.loc[convert(start):]
+df_s = df_daily_returns.loc[convert(date_start):]
+df_cum_profits = df_s.cumsum()
 
-df_cum_returns = df_s.cumsum()
-df_daily_profit = df_s / 1000  # Initial stake amount 1000
 
-df = df_trade_profit.groupby('strategy').filter(lambda x:
-                                                (
-                                                    (x['profit_ratio'].mean() > min_trade_ratio) &
-                                                    (x['profit_ratio'].median()
-                                                     > min_trade_ratio)
-                                                ))
+# Filter Strategies that don't meet minimum trade ratio
+df_min_trade_ratio = df_trade_profit.groupby('strategy').filter(lambda x:
+                                                                (
+                                                                    (x['profit_ratio'].mean() > min_trade_ratio) &
+                                                                    (x['profit_ratio'].median()
+                                                                     > min_trade_ratio)
+                                                                ))
 
 # Calculate the mean trade ratio for all strategies
 strategy_mean_trade_ratio = df_trade_profit.groupby(
     'strategy').mean('profit_ratio').sort_values('profit_ratio')
-# strategy_mean_trade_ratio = df_trade_profit.groupby('strategy').mean('profit_ratio') # No sort
+
+# List of strategies sorted by trade ratio
+top_strategies = strategy_mean_trade_ratio.index.tolist()
+
 
 # First and Last day of trades to be charted
 first_date = df_daily_returns.first_valid_index().strftime("%Y.%m.%d")
 last_date = df_daily_returns.last_valid_index().strftime("%Y.%m.%d")
+
+# Days betwwen first dtae and last date
 period = (df_daily_returns.last_valid_index() -
           df_daily_returns.first_valid_index()).days
+# Years between first date and last date
 period_y = period / 365.2425
 
-top_strategies = strategy_mean_trade_ratio.index.tolist()
 
-top_cum_returns = df_cum_returns.tail(1)
+# Download Benchmark Data
+df_bench = benchmark('BTC', start=first_date, end=last_date)
+
+
+top_cum_returns = df_cum_profits.tail(1)
 top_cum_returns.reset_index(drop=True, inplace=True)
 top_cum_returns = top_cum_returns.transpose()
 top_cum_returns.columns = ['cum_ret']
 top_cum_returns.sort_values("cum_ret", axis=0, ascending=True, inplace=True)
 top_cum_ret_strategies = strategy_mean_trade_ratio.index.tolist()
 
-cdgr = ((((df_cum_returns.iloc[-1]+1000) /
-        (df_cum_returns.iloc[0]+1000)) ** (1 / period)) - 1).to_frame()
+cdgr = ((((df_cum_profits.iloc[-1]+1000) /
+        (df_cum_profits.iloc[0]+1000)) ** (1 / period)) - 1).to_frame()
 cdgr.columns = ['cdgr']
 cdgr.sort_values("cdgr", axis=0, ascending=True, inplace=True)
 
@@ -361,7 +402,8 @@ bar_h_plot(cdgr,
 
 # Violin Plot of Strategies
 fig, ax = plt.subplots(1, 1, figsize=(15, 7))
-sns.violinplot(y=df['strategy'], x=df['profit_ratio'], color="skyblue")
+sns.violinplot(y=df_min_trade_ratio['strategy'],
+               x=df_min_trade_ratio['profit_ratio'], color="skyblue")
 
 ax.axvline(0, color='#fc4f30')
 
@@ -371,20 +413,30 @@ ax.set_title('Strategies where Mean & Median Trade Ratio > ' + str(min_trade_rat
 plt.show()
 # fig.savefig('AverageTradeProfitRatioVP.png')
 
+fig, ax = plt.subplots(1, 1, figsize=(15, 15))
+sns.violinplot(y=df_trade_profit['strategy'], x=df_trade_profit['profit_ratio'], color="skyblue")
+
+ax.axvline(0, color='#fc4f30')
+
+ax.set_title('Strategies where Mean & Median Trade Ratio > ' + str(min_trade_ratio),
+             fontsize=16)
+
+plt.show()
+
 
 # Plot 1 Cumulative Returns
-months = month_list(df_cum_returns)
+months = month_list(df_cum_profits)
 
 fig, ax = plt.subplots(1, 1, figsize=(14, 7))
 
-df_cum_returns[top_strategies[-top_n:]].plot(ax=ax)
+df_cum_profits[top_strategies[-top_n:]].plot(ax=ax)
 ax2 = ax.twinx()
 ax2.set_ylim(ax.get_ylim())
 ax2.set_yticks(
-    [df_cum_returns[strategy].iloc[-1]
-     for strategy in df_cum_returns[top_strategies[-top_n:]].columns])
+    [df_cum_profits[strategy].iloc[-1]
+     for strategy in df_cum_profits[top_strategies[-top_n:]].columns])
 
-ax2.set_yticklabels(df_cum_returns[top_strategies[-top_n:]].columns)
+ax2.set_yticklabels(df_cum_profits[top_strategies[-top_n:]].columns)
 
 for i in months:
     ax.axvline(datetime.strptime(i, "%d-%b-%y"), color='red', linestyle='--', linewidth=1)
@@ -403,8 +455,8 @@ plt.show()
 # Plot 2
 # Time series plot of daily returns per strategy
 
-a = ['NostalgiaForInfinityV7_10_1', 'NostalgiaForInfinityV7_10_0',
-     'NostalgiaForInfinityV7', 'NostalgiaForInfinityV6', 'NostalgiaForInfinityV7_2_0']
+a = ['NostalgiaForInfinityV7_10_1', 'NostalgiaForInfinityV7_10_0', 'NostalgiaForInfinityV7_10_2', 'NostalgiaForInfinityV7_11_0',
+     'NostalgiaForInfinityV7', 'NostalgiaForInfinityV6', 'NostalgiaForInfinityV7_3_1']
 
 line_plot(top_strategies, df_daily_profit, top_n)
 line_plot(a, df_daily_profit, top_n)
@@ -417,34 +469,36 @@ line_plot(a, df_daily_profit, top_n)
 ncolumns = 3
 nrows = math.ceil(top_n/ncolumns)
 
+# fig.savefig('HistDailyReturns.png')
 
-fig, ax = plt.subplots(nrows, ncolumns, figsize=(15, 7),
-                       sharex=True, sharey=True)
-print(ax)
-bins = [-0.1, -0.0875, -0.075, -0.0625, -0.05,
-        -0.0375, -0.025, -0.0125, 0, 0.0125,
-        0.025, 0.0375, 0.05, 0.0625, 0.075,
-        0.0875, 0.1, 0.1125, 0.125, 0.1375, 0.15]
-n = 0
-for strategy in top_strategies[-top_n:]:
-    ax[n, 0].hist(df_daily_profit[strategy],
-                  bins=bins,
-                  density=True,
-                  edgecolor='b',
-                  label=strategy)
 
-    ax[n, 0].set_title(strategy,
-                       fontsize=10)
+fig, axes = plt.subplots(nrows, ncolumns, figsize=(16, 8), sharex=True)
 
-    ax[n, 0].axvline(0,
-                     color='#fc4f30')
+for col, ax in zip(df_daily_profit.columns, axes.flatten()):
+    ax.hist(df_daily_profit[col],
+            density=True,
+            edgecolor='b',
+            bins=20,
+            label=strategy)
+    ax.axvline(0, color='#fc4f30')
+    ax.axvline(df_daily_profit[strategy].mean(), color='orange', linestyle='--')
+    ax.set_title(col)
+    plt.subplots_adjust(wspace=.15, hspace=.5)
+fig.suptitle('Daily Strategy Returns 2021-01-01 : 2021-08-15 (%)', fontsize=16)
+fig.supylabel('Return (%)', fontsize=16)
+plt.tight_layout()
 
-    ax[n, 0].axvline(df_daily_profit[strategy].mean(),
-                     color='orange',
-                     linestyle='--')
 
-    n += 1
-
+plt.show()
+# fig.savefig('HistDailyReturns.png')
+            density=True,
+            edgecolor='b',
+            bins=20,
+            label=strategy)
+    ax.axvline(0, color='#fc4f30')
+    ax.axvline(df_daily_profit[strategy].mean(), color='orange', linestyle='--')
+    ax.set_title(col)
+    plt.subplots_adjust(wspace=.15, hspace=.5)
 fig.suptitle('Daily Strategy Returns 2021-01-01 : 2021-08-15 (%)', fontsize=16)
 fig.supylabel('Return (%)', fontsize=16)
 plt.tight_layout()
